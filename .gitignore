@@ -1,0 +1,6 @@
+*.png
+.DS_Store
+.idea/
+__pycache__/
+*.csv
+test.py
