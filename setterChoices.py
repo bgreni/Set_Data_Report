@@ -1,5 +1,7 @@
 import pandas as pd
 from DataProcessor import DataProcessor as dp
+import sys
+
 
 def main():
     data = pd.read_csv("test.csv", sep=',')
@@ -12,12 +14,22 @@ def main():
 
     # parse data for each rotation
     dpList = []
+    i = 0
+    print("Processing Data")
     for rot in rotIndexes:
+        sys.stdout.flush()
+        print("{}% Done".format(round(i/6.0, 2)*100), end="\r")
         newDp = dp()
         newDp.parsedata(data[rot])
         dpList.append(newDp)
+        i += 1
+    i = 0
+    print("Creating Plots")
     for d in dpList:
-        d.showLocPlots()
+        sys.stdout.flush()
+        print("{}% Done".format(round(i/6.0, 2)*100), end="\r")
+        d.createPlots()
+        i += 1
 
 
 main()
