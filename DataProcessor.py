@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from pylatex import Document, Section, Figure, NoEscape, MiniPage, VerticalSpace, LineBreak, SubFigure, Tabular, Command
 from SetDataContainer import SetDataContainer as sdc
+from MapInfo import MapInfo as mi
+from MapInfo import MapInfos
 
 class DataProcessor:
 
@@ -18,6 +19,11 @@ class DataProcessor:
         self.hasReset = False
         self.hasIMP = False
         self.lastChoice = ""
+        self.locFileInfos = MapInfos()
+        self.callFileInfos = MapInfos()
+        self.ptaFileInfos = MapInfos()
+        self.impFileInfos = MapInfos()
+
 
     def parsedata(self, data):
         for index, row in data.iterrows():
@@ -29,89 +35,57 @@ class DataProcessor:
             chosenPlayer = result[:-1]
             passer = row["passer"]
             home, away = row["score"].split("-")
+            set = row["set"]
             self.sdc.addToLocMap(lockey, choicekey, result1)
             self.sdc.addToSetCallMap(middleCall, choicekey, result1)
             if int(passer) == int(chosenPlayer):
                 self.hasPTA = True
                 self.sdc.addToPTAMap(choicekey, result1)
-            if int(home) >= 20 or int(away) >= 20:
+            if self.isImportantTime((int(home), int(away)), int(set)):
                 self.hasIMP = True
                 self.sdc.addToIMPMAP(choicekey, result)
 
     def createPlots(self):
 
-        geometry_options = {"right": "1cm", "left": "1cm", "top": "1cm", "bottom": "1cm"}
-        doc = Document("Report", geometry_options=geometry_options)
-        doc.documentclass = Command(
-            'documentclass',
-            options=['12pt', 'landscape'],
-            arguments=['article'],
-        )
-
-        with doc.create(Section("Setter Location Maps")):
-            pass
-        i = 0
-
-        figure = Figure(position="h")
         for items in self.sdc.getLocMapItems():
             loc = items[0]
             fig, ax, im, captionString = self.createFigure(items[1])
             ax.set_title("On passes to location {} in rotation {}".format(loc, self.rotation))
             fig.colorbar(im)
             filename = self.locMapDirectory + "Location | {} | {}.png".format(self.rotation, loc)
+            # captionString += str(self.rotation) + " : " + loc
+            self.locFileInfos.add(mi(filename, captionString, self.rotation))
             fig.savefig(filename)
             plt.close(fig)
-            fig = self.createImage(filename, captionString)
-            figure.append(fig)
-            if i % 2 == 1:
-                doc.append(figure)
-                figure = Figure(position="h")
-            i += 1
 
-        with doc.create(Section("Setter Call Maps")):
-            pass
-        i = 0
-        figure = Figure(position="h")
         for items in self.sdc.getSetCallMapItems():
             call = items[0]
             fig, ax, im, captionString = self.createFigure(items[1])
             ax.set_title("When the middle is running {} in rotation {}".format(call, self.rotation))
             fig.colorbar(im)
             filename = self.callMapDirectory + "Setter Call | {} | {}.png".format(self.rotation, call)
+            # captionString += str(self.rotation) + " : " + call
+            self.callFileInfos.add(mi(filename, captionString, self.rotation))
             fig.savefig(filename)
             plt.close(fig)
-            fig = self.createImage(filename, captionString)
-            figure.append(fig)
-            if i % 2 == 1:
-                doc.append(figure)
-                figure = Figure(position="h")
-            i += 1
 
-        #
-        # if self.hasPTA:
-        #     fig, ax, im, captionString = self.createFigure(self.sdc.ptaMap)
-        #     ax.set_title("On pass to attack in rotation {}".format(self.rotation))
-        #     fig.colorbar(im)
-        #     filename = self.ptaMapDirectory + "PTA | {}.png".format(self.rotation)
-        #     # fig.savefig(filename)
-        #     # plt.close(fig)
-        #
-        # if self.hasIMP:
-        #     fig, ax, im, captionString = self.createFigure(self.sdc.IMPMAP)
-        #     ax.set_title("Either team over 20 in rotation {}".format(self.rotation))
-        #     fig.colorbar(im)
-        #     filename = self.IMPMAPDirectory + "IMP | {}.png".format(self.rotation)
-        #     # fig.savefig(filename)
-            # plt.close(fig)
+        if self.hasPTA:
+            fig, ax, im, captionString = self.createFigure(self.sdc.ptaMap)
+            ax.set_title("On pass to attack in rotation {}".format(self.rotation))
+            fig.colorbar(im)
+            filename = self.ptaMapDirectory + "PTA | {}.png".format(self.rotation)
+            self.ptaFileInfos.add(mi(filename, captionString, self.rotation))
+            fig.savefig(filename)
+            plt.close(fig)
 
-        doc.generate_pdf(clean_tex=False)
-
-    def createImage(self, filename, captionString):
-        fig = SubFigure(position="h")
-        file, typ = filename.split(".")
-        fig.add_image("\"{}\".{}".format(file, typ), width="340px")
-        fig.add_caption(captionString)
-        return fig
+        if self.hasIMP:
+            fig, ax, im, captionString = self.createFigure(self.sdc.IMPMAP)
+            ax.set_title("Important time in rotation {}".format(self.rotation))
+            fig.colorbar(im)
+            filename = self.IMPMAPDirectory + "IMP | {}.png".format(self.rotation)
+            self.impFileInfos.add(mi(filename, captionString, self.rotation))
+            fig.savefig(filename)
+            plt.close(fig)
 
     def createFigure(self, items):
         p, kp, eff, n, captionString = self.createChoiceArray(items)
@@ -208,4 +182,14 @@ class DataProcessor:
 
         string = string.translate(str.maketrans("", "", "(){}<>[]"))
         return string, actualCall
+
+    def getCaptions(self):
+        return self.locFileInfos, self.callFileInfos, self.ptaFileInfos, self.impFileInfos
+
+    def isImportantTime(self, score, gameSet):
+        if gameSet < 5:
+            return (score[0] >= 20 or score[1] >= 20) and abs(score[0] - score[1]) <= 2
+        else:
+            return (score[0] >= 10 or score[1] >= 10) and abs(score[0] - score[1]) <= 2
+
 
