@@ -1,17 +1,19 @@
-from pylatex import Document, Section, Figure, NoEscape, MiniPage, VerticalSpace, LineBreak, SubFigure, Tabular, Command, NewPage, Subsection, Package
-from os import listdir
+from pylatex import Document, Section, Figure, SubFigure, Command, Subsection, Package, NoEscape
 
 
 class PdfGenerator:
 
-    def __init__(self):
+    def __init__(self, directory, name):
         geometry_options = {"right": "1cm", "left": "1cm", "top": "1cm", "bottom": "1cm"}
-        self.doc = Document("Report", geometry_options=geometry_options)
+        self.doc = Document("{}/{}-Report".format(directory, name), geometry_options=geometry_options)
         self.doc.documentclass = Command(
             'documentclass',
             options=['10pt', 'vertical'],
             arguments=['article'],
         )
+        self.doc.preamble.append(Command("title", name))
+        self.doc.real_data.append(Command("date", ""))
+        self.doc.append(NoEscape(r'\maketitle'))
         self.doc.packages.append(Package("placeins"))
         self.locMapDirectory = "LocationMaps/"
         self.callMapDirectory = "SetCallMaps/"
@@ -20,11 +22,12 @@ class PdfGenerator:
 
     def createPdf(self, mapInfosList):
         self.createLocSection(mapInfosList[0])
-        # self.doc.append(Command("clearpage"))
         self.createCallSection(mapInfosList[1])
-        # self.doc.append(Command("clearpage"))
         self.createPtaSection(mapInfosList[2])
         self.createImpSection(mapInfosList[3])
+        self.createPosResetSection(mapInfosList[4])
+        self.createNegResetSection(mapInfosList[5])
+        self.createRunBreakSection(mapInfosList[6])
         self.finish()
 
     def generateSection(self, section, fileInfos):
@@ -54,6 +57,18 @@ class PdfGenerator:
         section = Section("Important Times Maps")
         self.generateSection(section, impFileInfos)
 
+    def createPosResetSection(self, posResetInfos):
+        section = Section("Positive Reset Maps")
+        self.generateSection(section, posResetInfos)
+
+    def createNegResetSection(self, negResetInfos):
+        section = Section("Negative Reset Maps")
+        self.generateSection(section, negResetInfos)
+
+    def createRunBreakSection(self, runBreakInfos):
+        section = Section("Run Breaking Decision Maps")
+        self.generateSection(section, runBreakInfos)
+
     def makeImages(self, section, fileInfos):
         figure = Figure(position="h")
         for index, infos in enumerate(fileInfos):
@@ -65,7 +80,6 @@ class PdfGenerator:
             if index == len(fileInfos) - 1:
                 section.append(figure)
 
-
     def createImage(self, filename, captionString):
         fig = SubFigure(position="h")
         file, typ = filename.split(".")
@@ -74,4 +88,4 @@ class PdfGenerator:
         return fig
 
     def finish(self):
-        self.doc.generate_pdf(clean_tex=False, compiler='pdflatex')
+        self.doc.generate_pdf(clean_tex=True, compiler='pdflatex')

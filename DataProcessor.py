@@ -1,96 +1,154 @@
-import pandas as pd
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use("agg")
 from SetDataContainer import SetDataContainer as sdc
 from MapInfo import MapInfo as mi
 from MapInfo import MapInfos
+from ResetTracker import ResetTracker
+import os
 
 class DataProcessor:
 
-    def __init__(self):
+    def __init__(self, baseDirectory):
         self.sdc = sdc()
         self.rotation = ""
-        self.locMapDirectory = "LocationMaps/"
-        self.callMapDirectory = "SetCallMaps/"
-        self.ptaMapDirectory = "PTAMaps/"
-        self.IMPMAPDirectory = "ImportantTimesMaps/"
+        self.locMapDirectory = baseDirectory + "/LocationMaps/"
+        self.callMapDirectory = baseDirectory + "/SetCallMaps/"
+        self.ptaMapDirectory = baseDirectory + "/PTAMaps/"
+        self.IMPMAPDirectory = baseDirectory + "/ImportantTimesMaps/"
+        self.posResetDirectory = baseDirectory + "/PositiveResetMaps/"
+        self.negResetDirectory = baseDirectory + "/NegativeResetMaps/"
+        self.runBreakDirectory = baseDirectory + "/RunBreakMaps/"
+        self.createDirectory(self.locMapDirectory)
+        self.createDirectory(self.callMapDirectory)
+        self.createDirectory(self.ptaMapDirectory)
+        self.createDirectory(self.IMPMAPDirectory)
+        self.createDirectory(self.posResetDirectory)
+        self.createDirectory(self.negResetDirectory)
+        self.createDirectory(self.runBreakDirectory)
         self.sets = [["Black", "Middle", "Red"], ["N/A", "Pipe", "C-Ball"]]
         self.hasPTA = False
         self.hasReset = False
         self.hasIMP = False
+        self.hasPosReset = False
+        self.hasNegReset = False
+        self.hasRun = False
         self.lastChoice = ""
         self.locFileInfos = MapInfos()
         self.callFileInfos = MapInfos()
         self.ptaFileInfos = MapInfos()
         self.impFileInfos = MapInfos()
+        self.posResetInfos = MapInfos()
+        self.negResetInfos = MapInfos()
+        self.runBreakInfos = MapInfos()
 
+    def createDirectory(self, path):
+        try:
+            os.mkdir(path)
+        except FileExistsError:
+            pass
 
     def parsedata(self, data):
+        rt = ResetTracker()
         for index, row in data.iterrows():
+
             self.rotation = row["rotation"]
             lockey = row["location"]
             choicekey, middleCall = self.stripDelims(row["choice"])
             result = row["result"]
-            result1 = result[len(result)-1]
+            hitResult = result[len(result)-1]
             chosenPlayer = result[:-1]
+            rt.currentHitter = chosenPlayer
             passer = row["passer"]
             home, away = row["score"].split("-")
+            isRun = row["run"]
             set = row["set"]
-            self.sdc.addToLocMap(lockey, choicekey, result1)
-            self.sdc.addToSetCallMap(middleCall, choicekey, result1)
+            rt.currentHitSet = set
+
+            self.sdc.addToLocMap(lockey, choicekey, hitResult)
+            self.sdc.addToSetCallMap(middleCall, choicekey, hitResult)
             if int(passer) == int(chosenPlayer):
                 self.hasPTA = True
-                self.sdc.addToPTAMap(choicekey, result1)
+                self.sdc.addToPTAMap(choicekey, hitResult)
             if self.isImportantTime((int(home), int(away)), int(set)):
                 self.hasIMP = True
-                self.sdc.addToIMPMAP(choicekey, result)
+                self.sdc.addToIMPMAP(choicekey, hitResult)
+            if rt.isPosReset():
+                self.hasPosReset = True
+                self.sdc.addToPosResetMap(choicekey, hitResult)
+            if rt.isNegReset():
+                self.hasNegReset = True
+                self.sdc.addToNegResetMap(choicekey, hitResult)
+            if isRun == "end":
+                self.hasRun = True
+                self.sdc.addToRunBreakMap(choicekey, hitResult)
+
+            rt.updateOld(hitResult)
 
     def createPlots(self):
 
+        title = "On passes to location {} in rotation {}"
+        filename = "Location | {} | {}.png"
         for items in self.sdc.getLocMapItems():
-            loc = items[0]
-            fig, ax, im, captionString = self.createFigure(items[1])
-            ax.set_title("On passes to location {} in rotation {}".format(loc, self.rotation))
-            fig.colorbar(im)
-            filename = self.locMapDirectory + "Location | {} | {}.png".format(self.rotation, loc)
-            # captionString += str(self.rotation) + " : " + loc
-            self.locFileInfos.add(mi(filename, captionString, self.rotation))
-            fig.savefig(filename)
-            plt.close(fig)
+            self.createType2Map(title, self.locMapDirectory, filename, self.locFileInfos, items)
 
+        title = "When the middle is running {} in rotation {}"
+        filename = "Setter Call | {} | {}.png"
         for items in self.sdc.getSetCallMapItems():
-            call = items[0]
-            fig, ax, im, captionString = self.createFigure(items[1])
-            ax.set_title("When the middle is running {} in rotation {}".format(call, self.rotation))
-            fig.colorbar(im)
-            filename = self.callMapDirectory + "Setter Call | {} | {}.png".format(self.rotation, call)
-            # captionString += str(self.rotation) + " : " + call
-            self.callFileInfos.add(mi(filename, captionString, self.rotation))
-            fig.savefig(filename)
-            plt.close(fig)
+            self.createType2Map(title, self.callMapDirectory, filename, self.callFileInfos, items)
 
         if self.hasPTA:
-            fig, ax, im, captionString = self.createFigure(self.sdc.ptaMap)
-            ax.set_title("On pass to attack in rotation {}".format(self.rotation))
-            fig.colorbar(im)
-            filename = self.ptaMapDirectory + "PTA | {}.png".format(self.rotation)
-            self.ptaFileInfos.add(mi(filename, captionString, self.rotation))
-            fig.savefig(filename)
-            plt.close(fig)
+            title = "On pass to attack in rotation {}"
+            filename = "PTA | {}.png"
+            self.createType1Map(self.sdc.ptaMap, title, self.ptaMapDirectory, filename, self.ptaFileInfos)
 
         if self.hasIMP:
-            fig, ax, im, captionString = self.createFigure(self.sdc.IMPMAP)
-            ax.set_title("Important time in rotation {}".format(self.rotation))
-            fig.colorbar(im)
-            filename = self.IMPMAPDirectory + "IMP | {}.png".format(self.rotation)
-            self.impFileInfos.add(mi(filename, captionString, self.rotation))
-            fig.savefig(filename)
-            plt.close(fig)
+            title = "Important time in rotation {}"
+            filename = "IMP | {}.png"
+            self.createType1Map(self.sdc.IMPMAP, title, self.IMPMAPDirectory, filename, self.impFileInfos)
+
+        if self.hasPosReset:
+            title = "Positive reset in rotation {}"
+            filename = "PR | {}.png"
+            self.createType1Map(self.sdc.posResetMap, title, self.posResetDirectory, filename, self.posResetInfos)
+
+        if self.hasNegReset:
+            title = "Negative reset in rotation {}"
+            filename = "NR | {}.png"
+            self.createType1Map(self.sdc.negResetMap, title, self.negResetDirectory, filename, self.negResetInfos)
+
+        if self.hasRun:
+            title = "Run breaking decision in rotation {}"
+            filename = "RB | {}.png"
+            self.createType1Map(self.sdc.runBreakMap, title, self.runBreakDirectory, filename, self.runBreakInfos)
+
+
+    def createType1Map(self, m, title, directory, filenamePart, infos):
+        fig, ax, im, captionString = self.createFigure(m)
+        ax.set_title(title.format(self.rotation))
+        fig.colorbar(im)
+        filename = directory + filenamePart.format(self.rotation)
+        infos.add(mi(filename, captionString, self.rotation))
+        fig.savefig(filename)
+        plt.close(fig)
+
+    def createType2Map(self, title, directory, filenamePart, infos, items):
+        identifier = items[0]
+        fig, ax, im, captionString = self.createFigure(items[1])
+        if fig is None:
+            return
+        ax.set_title(title.format(identifier, self.rotation))
+        fig.colorbar(im)
+        filename = directory + filenamePart.format(self.rotation, identifier)
+        infos.add(mi(filename, captionString, self.rotation))
+        fig.savefig(filename)
+        plt.close(fig)
 
     def createFigure(self, items):
         p, kp, eff, n, captionString = self.createChoiceArray(items)
-        # if p.shape == (0,):
-        #     return
+        if p.shape == (0,):
+             return None, None, None, None
         fig, ax = plt.subplots()
         im = ax.imshow(p, cmap="Greens", vmax=1.0, vmin=0.0)
 
@@ -99,9 +157,9 @@ class DataProcessor:
 
         for i in range(2):
             for j in range(3):
-                percent = "{}%".format(round(p[i][j] * 100, 2))
-                kPercent = "{}%".format(round(kp[i][j] * 100, 2))
-                efficiency = "{}%".format(round(eff[i][j] * 100, 2))
+                percent = "{:.2f}%".format(round(p[i][j] * 100, 2))
+                kPercent = "{:.2f}%".format(round(kp[i][j] * 100, 2))
+                efficiency = "{:.2f}%".format(round(eff[i][j] * 100, 2))
                 text = "{}\n{} of sets\n{} Kill%\n{} Efficiency\n{} total sets".format(self.sets[i][j], percent,
                                                                                        kPercent, efficiency, n[i][j][2])
                 ax.text(j, i, text, ha="center", va="center", color="black")
@@ -110,7 +168,7 @@ class DataProcessor:
     def createChoiceArray(self, m):
         middleStuff = []
         for i in range(3):
-            middleStuff.append(m["31"][i] + m["51"][i] + m["61"][i])
+            middleStuff.append(m["31"][i] + m["51"][i] + m["61"][i] + m["FS"][i])
 
         numbers = [[m["BK"], middleStuff, m["Red"]],
                    [[0, 0, 0], m["p"], m["C"]]]
@@ -118,7 +176,7 @@ class DataProcessor:
         total += sum([k[2] for k in numbers[1]])
         total = float(total)
 
-        allMids = [m["31"], m["51"], m["61"]]
+        allMids = [m["31"], m["51"], m["61"], m["FS"]]
         stats = []
         for mid in allMids:
             if mid[2] != 0:
@@ -127,14 +185,15 @@ class DataProcessor:
             else:
                 kill = 0.0
                 killEff = 0.0
-            totalOf = round(mid[2] / total, 2) * 100
+            totalOf = round(mid[2] / total, 2) * 100 if total != 0 else 0.0
             stats.append([kill, killEff, totalOf])
 
         captionString = "\n"
-        sets = ["31", "51", "61"]
+        sets = ["31", "51", "61", "FS"]
         for i in range(len(stats)):
-            captionString += "{}: {}% kill, {}% kill efficiency, {}% of total sets\n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
-
+            captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total sets\n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
+        setDumps = "Setter Dumps: {:.0f} kills on {} attempts\n".format(m["D"][0], m["D"][2])
+        captionString += setDumps
         percent = []
         killPercent = []
         efficiency = []
@@ -148,7 +207,7 @@ class DataProcessor:
                     errors = numbers[j][i][1]
                     totalSets = numbers[j][i][2]
                     # percentage of total sets given
-                    row.append(totalSets/total)
+                    row.append(totalSets/total if total > 0 else 0.0)
                     if totalSets == 0:
                         kpRow.append(0.0)
                         effRow.append(0.0)
@@ -184,7 +243,8 @@ class DataProcessor:
         return string, actualCall
 
     def getCaptions(self):
-        return self.locFileInfos, self.callFileInfos, self.ptaFileInfos, self.impFileInfos
+        return (self.locFileInfos, self.callFileInfos, self.ptaFileInfos,
+                self.impFileInfos, self.posResetInfos, self.negResetInfos, self.runBreakInfos)
 
     def isImportantTime(self, score, gameSet):
         if gameSet < 5:
