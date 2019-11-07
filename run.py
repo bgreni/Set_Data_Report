@@ -3,6 +3,8 @@ import argparse
 import pandas as pd
 import time
 from multiprocessing import Process
+import os
+
 
 def getForSingleGame(threaded):
     scr = SetterChoicesReport()
@@ -12,20 +14,19 @@ def getForSingleGame(threaded):
     else:
         scr.run(filename, path)
 
+
 def threadFunc(bigPath, game, scr, data):
     path = bigPath + game.split("/")[0]
     scr.runThreaded(game.split("/")[1], path, data)
 
+
 def getForAllGames(makeAll):
-    bigPath = "/Users/briangrenier/PycharmProjects/TestProject/Game-Stats/"
-    allGames = ["Oct-18-vs-TWU/Oct-18-vs-TWU.csv",
-                "Oct-19-vs-TWU/Oct-19-vs-TWU.csv",
-                "Oct-25-vs-UBCO/Oct-25-vs-UBCO.csv",
-                "Oct-26-vs-UBCO/Oct-26-vs-UBCO.csv",
-                "Sept-20-vs-TRU/Sept-20-vs-TRU.csv"]
+    bigPath = os.getcwd() + "/Game-Stats/"
+    allGames = [d for d in os.listdir("Game-Stats") if os.path.isdir(os.path.join("./Game-Stats", d))]
+    allGames = ["{}/{}.csv".format(d, d) for d in allGames]
     datas = []
-    start = time.time()
     threads = []
+    start = time.time()
     for game in allGames:
         scr = SetterChoicesReport()
         scr.givenData = True
@@ -48,6 +49,7 @@ def getForAllGames(makeAll):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--allGames",
                         action="store_true",
@@ -69,7 +71,7 @@ if __name__ == "__main__":
         else:
             getForSingleGame(False)
     elif args.allGames:
-        if args.makeInd:
+        if args.makeAll:
             getForAllGames(True)
         else:
             getForAllGames(False)
