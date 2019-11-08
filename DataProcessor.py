@@ -1,3 +1,4 @@
+
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -49,11 +50,14 @@ class DataProcessor:
         except FileExistsError:
             pass
 
-    def parsedata(self, data):
+    def parsedata(self, data, rotation=None):
         rt = ResetTracker()
+        if rotation is None:
+            self.rotation = rotation
+        else:
+            self.rotation = data.iloc[0]["rotation"]
         for index, row in data.iterrows():
 
-            self.rotation = row["rotation"]
             lockey = row["location"]
             choicekey, middleCall = self.stripDelims(row["choice"])
             result = row["result"]
@@ -148,7 +152,7 @@ class DataProcessor:
     def createFigure(self, items):
         p, kp, eff, n, captionString = self.createChoiceArray(items)
         if p.shape == (0,):
-             return None, None, None, None
+            return None, None, None, None
         fig, ax = plt.subplots()
         im = ax.imshow(p, cmap="Greens", vmax=1.0, vmin=0.0)
 
@@ -242,7 +246,7 @@ class DataProcessor:
         string = string.translate(str.maketrans("", "", "(){}<>[]"))
         return string, actualCall
 
-    def getCaptions(self):
+    def getInfos(self):
         return (self.locFileInfos, self.callFileInfos, self.ptaFileInfos,
                 self.impFileInfos, self.posResetInfos, self.negResetInfos, self.runBreakInfos)
 

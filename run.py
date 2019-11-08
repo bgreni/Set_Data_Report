@@ -33,8 +33,6 @@ def getForAllGames(makeAll):
         fullpath = bigPath + game
         data = pd.read_csv(fullpath, sep=",")
         if makeAll:
-            # path = bigPath + game.split("/")[0]
-            # scr.runThreaded(game.split("/")[1], path, data)
             p = Process(target=threadFunc, args=[bigPath, game, scr, data])
             p.start()
             threads.append(p)

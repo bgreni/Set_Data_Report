@@ -28,6 +28,7 @@ class PdfGenerator:
         self.createPosResetSection(mapInfosList[4])
         self.createNegResetSection(mapInfosList[5])
         self.createRunBreakSection(mapInfosList[6])
+        self.createAllRotationsSection(mapInfosList)
         self.finish()
 
     def generateSection(self, section, fileInfos):
@@ -68,6 +69,32 @@ class PdfGenerator:
     def createRunBreakSection(self, runBreakInfos):
         section = Section("Run Breaking Decision Maps")
         self.generateSection(section, runBreakInfos)
+
+    def createAllRotationsSection(self, allInfos):
+        section = Section("All Rotations")
+        locSub = Subsection("Pass Location")
+        self.generateAllRotationSubsection(allInfos[0], locSub, section)
+        callSub = Subsection("Setter Call")
+        self.generateAllRotationSubsection(allInfos[1], callSub, section)
+        ptaSub = Subsection("Pass To Attack")
+        self.generateAllRotationSubsection(allInfos[2], ptaSub, section)
+        impSub = Subsection("Important Times")
+        self.generateAllRotationSubsection(allInfos[3], impSub, section)
+        posSub = Subsection("Positive Reset")
+        self.generateAllRotationSubsection(allInfos[4], posSub, section)
+        negSub = Subsection("Negative Reset")
+        self.generateAllRotationSubsection(allInfos[5], negSub, section)
+        runBSub = Subsection("Run Break")
+        self.generateAllRotationSubsection(allInfos[6], runBSub, section)
+        self.doc.append(section)
+
+
+    def generateAllRotationSubsection(self, infos, subsection, section):
+        subInfos = infos.getByRotation("All Rotations")
+        if len(subInfos) != 0:
+            self.makeImages(subsection, subInfos)
+            section.append(subsection)
+            section.append(Command("FloatBarrier"))
 
     def makeImages(self, section, fileInfos):
         figure = Figure(position="h")

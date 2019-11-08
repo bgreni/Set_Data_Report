@@ -1,2 +1,2 @@
 
-python setterChoices.py --singleFile --threaded
+python run.py --singleFile --threaded
