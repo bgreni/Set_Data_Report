@@ -31,7 +31,10 @@ def getForAllGames(makeAll):
         scr = SetterChoicesReport()
         scr.givenData = True
         fullpath = bigPath + game
-        data = pd.read_csv(fullpath, sep=",")
+        try:
+            data = pd.read_csv(fullpath, sep=",")
+        except:
+            raise IOError("could not read file: {}".format(game))
         if makeAll:
             p = Process(target=threadFunc, args=[bigPath, game, scr, data])
             p.start()

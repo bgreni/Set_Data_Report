@@ -41,7 +41,10 @@ class SetterChoicesReport:
             a pdf report"""
 
         if not self.givenData:
-            data = pd.read_csv("{}/{}".format(path, filename), sep=',')
+            try:
+                data = pd.read_csv("{}/{}".format(path, filename), sep=',')
+            except:
+                raise IOError("could not read from file: {}".format(filename))
         else:
             data = given
         # make a list of pandas df indexes for each rotation 1-6
