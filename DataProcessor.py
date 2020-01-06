@@ -9,25 +9,30 @@ from MapInfo import MapInfos
 from ResetTracker import ResetTracker
 import os
 
-class DataProcessor:
 
-    def __init__(self, baseDirectory):
+class DataProcessor:
+    '''Converts the pandas dataframe containing set data into matplotlib images
+       and saves the to the appropriate folder'''
+
+    def __init__(self, baseDirectory=None, posMap=None):
         self.sdc = sdc()
         self.rotation = ""
-        self.locMapDirectory = baseDirectory + "/LocationMaps/"
-        self.callMapDirectory = baseDirectory + "/SetCallMaps/"
-        self.ptaMapDirectory = baseDirectory + "/PTAMaps/"
-        self.IMPMAPDirectory = baseDirectory + "/ImportantTimesMaps/"
-        self.posResetDirectory = baseDirectory + "/PositiveResetMaps/"
-        self.negResetDirectory = baseDirectory + "/NegativeResetMaps/"
-        self.runBreakDirectory = baseDirectory + "/RunBreakMaps/"
-        self.createDirectory(self.locMapDirectory)
-        self.createDirectory(self.callMapDirectory)
-        self.createDirectory(self.ptaMapDirectory)
-        self.createDirectory(self.IMPMAPDirectory)
-        self.createDirectory(self.posResetDirectory)
-        self.createDirectory(self.negResetDirectory)
-        self.createDirectory(self.runBreakDirectory)
+        if baseDirectory is not None:
+            self.baseDirectory = baseDirectory
+            self.locMapDirectory = baseDirectory + "/LocationMaps/"
+            self.callMapDirectory = baseDirectory + "/SetCallMaps/"
+            self.ptaMapDirectory = baseDirectory + "/PTAMaps/"
+            self.IMPMAPDirectory = baseDirectory + "/ImportantTimesMaps/"
+            self.posResetDirectory = baseDirectory + "/PositiveResetMaps/"
+            self.negResetDirectory = baseDirectory + "/NegativeResetMaps/"
+            self.runBreakDirectory = baseDirectory + "/RunBreakMaps/"
+            self.createDirectory(self.locMapDirectory)
+            self.createDirectory(self.callMapDirectory)
+            self.createDirectory(self.ptaMapDirectory)
+            self.createDirectory(self.IMPMAPDirectory)
+            self.createDirectory(self.posResetDirectory)
+            self.createDirectory(self.negResetDirectory)
+            self.createDirectory(self.runBreakDirectory)
         self.sets = [["Black", "Middle", "Red"], ["N/A", "Pipe", "C-Ball"]]
         self.hasPTA = False
         self.hasReset = False
@@ -43,21 +48,34 @@ class DataProcessor:
         self.posResetInfos = MapInfos()
         self.negResetInfos = MapInfos()
         self.runBreakInfos = MapInfos()
+        self.PTAMaking = False
+        self.posInferenceMap = posMap
 
     def createDirectory(self, path):
+        '''Creates a directory for a given map type if it does not already exist'''
+
         try:
             os.mkdir(path)
         except FileExistsError:
             pass
 
-    def parsedata(self, data, rotation=None):
+    def parsedata(self, data, rotation=None, passedPTAMap=None):
+        '''iterates over the data one row at a time and parses it into the data container'''
+
+        # used to track if a reset has occurred
         rt = ResetTracker()
-        if rotation is None:
+        if rotation is not None:
             self.rotation = rotation
         else:
             self.rotation = data.iloc[0]["rotation"]
+        # print("---------------")
+        # print(self.rotation)
+        # print(self.posInferenceMap)
+        # print("---------------")
+
         for index, row in data.iterrows():
 
+            # extract all the information I need
             lockey = row["location"]
             choicekey, middleCall = self.stripDelims(row["choice"])
             result = row["result"]
@@ -72,9 +90,11 @@ class DataProcessor:
 
             self.sdc.addToLocMap(lockey, choicekey, hitResult)
             self.sdc.addToSetCallMap(middleCall, choicekey, hitResult)
-            if int(passer) == int(chosenPlayer):
+            if int(passer) == int(chosenPlayer) and self.rotation != "All  Rotations":
                 self.hasPTA = True
                 self.sdc.addToPTAMap(choicekey, hitResult)
+            else:
+                self.sdc.addPass(str(passer))
             if self.isImportantTime((int(home), int(away)), int(set)):
                 self.hasIMP = True
                 self.sdc.addToIMPMAP(choicekey, hitResult)
@@ -89,6 +109,13 @@ class DataProcessor:
                 self.sdc.addToRunBreakMap(choicekey, hitResult)
 
             rt.updateOld(hitResult)
+        self.sdc.addPasses(self.posInferenceMap)
+        if passedPTAMap is not None:
+            # print(self.baseDirectory)
+            # print(self.hasPTA)
+            self.sdc.ptaMap = passedPTAMap
+            # print(passedPTAMap)
+        # print(self.locMapDirectory, self.rotation, self.sdc.passCounts)
 
     def createPlots(self):
 
@@ -103,9 +130,11 @@ class DataProcessor:
             self.createType2Map(title, self.callMapDirectory, filename, self.callFileInfos, items)
 
         if self.hasPTA:
+            self.PTAMaking = True
             title = "On pass to attack in rotation {}"
             filename = "PTA | {}.png"
             self.createType1Map(self.sdc.ptaMap, title, self.ptaMapDirectory, filename, self.ptaFileInfos)
+            self.PTAMaking = False
 
         if self.hasIMP:
             title = "Important time in rotation {}"
@@ -130,6 +159,8 @@ class DataProcessor:
 
     def createType1Map(self, m, title, directory, filenamePart, infos):
         fig, ax, im, captionString = self.createFigure(m)
+        if fig is None:
+            return
         ax.set_title(title.format(self.rotation))
         fig.colorbar(im)
         filename = directory + filenamePart.format(self.rotation)
@@ -153,6 +184,12 @@ class DataProcessor:
         p, kp, eff, n, captionString = self.createChoiceArray(items)
         if p.shape == (0,):
             return None, None, None, None
+
+        # if str(self.rotation) == "1" and self.PTAMaking:
+        #     print(self.sdc.passCounts["8"])
+        #     print(self.sdc.ptaMap["Red"])
+        #     print(n[0][0])
+
         fig, ax = plt.subplots()
         im = ax.imshow(p, cmap="Greens", vmax=1.0, vmin=0.0)
 
@@ -164,22 +201,34 @@ class DataProcessor:
                 percent = "{:.2f}%".format(round(p[i][j] * 100, 2))
                 kPercent = "{:.2f}%".format(round(kp[i][j] * 100, 2))
                 efficiency = "{:.2f}%".format(round(eff[i][j] * 100, 2))
-                text = "{}\n{} of sets\n{} Kill%\n{} Efficiency\n{} total sets".format(self.sets[i][j], percent,
+                if self.PTAMaking:
+                    # print("---------------------")
+                    # print(n[i][j][2])
+                    # print(n[i][j][3])
+                    # print("---------------------")
+                    passSetPercent = n[i][j][2] / float(n[i][j][3]) * 100 if n[i][j][3] != 0 else 0.0
+                    text = "{}\n{:.2f}% of passes\n{} Kill%\n{} Efficiency\n{} total sets\n{} total passes".format(self.sets[i][j], passSetPercent,
+                                                                                           kPercent, efficiency,
+                                                                                           n[i][j][2], n[i][j][3])
+                else:
+                    text = "{}\n{} of sets\n{} Kill%\n{} Efficiency\n{} total sets".format(self.sets[i][j], percent,
                                                                                        kPercent, efficiency, n[i][j][2])
                 ax.text(j, i, text, ha="center", va="center", color="black")
         return fig, ax, im, captionString
 
     def createChoiceArray(self, m):
         middleStuff = []
-        for i in range(3):
+        for i in range(4):
             middleStuff.append(m["31"][i] + m["51"][i] + m["61"][i] + m["FS"][i])
 
+        # create list which stats for each position in order
         numbers = [[m["BK"], middleStuff, m["Red"]],
-                   [[0, 0, 0], m["p"], m["C"]]]
+                   [self.sdc.initSetInformation(), m["p"], m["C"]]]
         total = sum([k[2] for k in numbers[0]])
         total += sum([k[2] for k in numbers[1]])
         total = float(total)
 
+        # create stats list for middle sets individually
         allMids = [m["31"], m["51"], m["61"], m["FS"]]
         stats = []
         for mid in allMids:
@@ -189,13 +238,23 @@ class DataProcessor:
             else:
                 kill = 0.0
                 killEff = 0.0
-            totalOf = round(mid[2] / total, 2) * 100 if total != 0 else 0.0
+            if self.PTAMaking:
+                totalOf = round(mid[2] / float(mid[3]), 2) * 100 if mid[3] != 0 else 0.0
+            else:
+                totalOf = round(mid[2] / total, 2) * 100 if total != 0 else 0.0
             stats.append([kill, killEff, totalOf])
 
+        # generate caption string for middle sets
         captionString = "\n"
         sets = ["31", "51", "61", "FS"]
         for i in range(len(stats)):
-            captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total sets\n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
+            if self.PTAMaking:
+                captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total passes \n".format(sets[i],
+                                                                                                         stats[i][0],
+                                                                                                         stats[i][1],
+                                                                                                         stats[i][2])
+            else:
+                captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total \n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
         setDumps = "Setter Dumps: {:.0f} kills on {} attempts\n".format(m["D"][0], m["D"][2])
         captionString += setDumps
         percent = []
@@ -211,6 +270,8 @@ class DataProcessor:
                     errors = numbers[j][i][1]
                     totalSets = numbers[j][i][2]
                     # percentage of total sets given
+                    if self.PTAMaking:
+                        total = float(numbers[j][i][3])
                     row.append(totalSets/total if total > 0 else 0.0)
                     if totalSets == 0:
                         kpRow.append(0.0)
@@ -228,9 +289,12 @@ class DataProcessor:
         kpArr = np.array(killPercent)
         effArr = np.array(efficiency)
 
+        # print(numbers)
+
         return arr, kpArr, effArr, numbers, captionString
 
-    def stripDelims(self, string):
+    @staticmethod
+    def stripDelims(string):
         actualCall = "None"
         middleCall = string[0]
         middleRuns = ["31", "51", "61"]

@@ -10,6 +10,8 @@ class SetDataContainer:
         self.posResetMap = self.getChoices()
         self.negResetMap = self.getChoices()
         self.runBreakMap = self.getChoices()
+        self.playerToPos = {}
+        self.passCounts = {}
 
     def addToLocMap(self, lockey, choicekey, result):
         if lockey not in self.locMap:
@@ -23,6 +25,7 @@ class SetDataContainer:
 
     def addToPTAMap(self, choicekey, result):
         self.addToMap(self.ptaMap, choicekey, result)
+        self.ptaMap[choicekey][3] += 1
 
     def addToIMPMAP(self, choicekey, result):
         self.addToMap(self.IMPMAP, choicekey, result)
@@ -43,6 +46,18 @@ class SetDataContainer:
         elif result == "E":
             m[choicekey][1] += 1
 
+    def addPass(self, player):
+        if player not in self.passCounts:
+            self.passCounts[player] = 0
+        self.passCounts[player] += 1
+
+    def addPasses(self, posMap):
+        for player, count in self.passCounts.items():
+            if player in posMap and player != -1:
+                pos = posMap[player]
+                self.ptaMap[pos][3] += count
+
+
     def addToNestedMap(self, m, choicekey, result, extraIndex):
         m[extraIndex][choicekey][2] += 1
         if result == "K":
@@ -55,9 +70,6 @@ class SetDataContainer:
 
     def getSetCallMapItems(self):
         return self.setCallMap.items()
-
-    def getResetMapItems(self):
-        return self.resetMap.items()
 
     def getIMPMAPItems(self):
         return self.IMPMAP.items()
@@ -72,9 +84,10 @@ class SetDataContainer:
             "61": self.initSetInformation(),
             "p": self.initSetInformation(),
             "D": self.initSetInformation(),
-            "FS": self.initSetInformation()
+            "FS": self.initSetInformation(),
+            "62": self.initSetInformation()
         }
         return choices
 
     def initSetInformation(self):
-        return [0.0, 0.0, 0]
+        return [0.0, 0.0, 0, 0]

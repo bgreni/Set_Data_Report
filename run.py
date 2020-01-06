@@ -6,9 +6,13 @@ from multiprocessing import Process
 import os
 
 
-def getForSingleGame(threaded):
+def getForSingleGame(threaded, filename):
     scr = SetterChoicesReport()
-    filename, path = scr.getFileName()
+    fullPath = os.path.abspath(filename)
+    pathList = fullPath.split("/")
+    filename = pathList.pop()
+    path = "/".join(pathList)
+    print(filename, path)
     if threaded:
         scr.runThreaded(filename, path)
     else:
@@ -23,6 +27,11 @@ def threadFunc(bigPath, game, scr, data):
 def getForAllGames(makeAll):
     bigPath = os.getcwd() + "/Game-Stats/"
     allGames = [d for d in os.listdir("Game-Stats") if os.path.isdir(os.path.join("./Game-Stats", d))]
+    filterList = ["LocationMaps", "SetCallMaps", "PTAMaps", "ImportantTimesMaps", "PositiveResetMaps", "NegativeResetMaps", "RunBreakMaps"]
+    for s in filterList:
+        if s in allGames:
+            allGames.remove(s)
+    print(allGames)
     allGames = ["{}/{}.csv".format(d, d) for d in allGames]
     datas = []
     threads = []
@@ -48,7 +57,6 @@ def getForAllGames(makeAll):
         thread.join()
     print("{:.3f} total seconds".format(time.time() - start))
 
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
@@ -64,13 +72,17 @@ if __name__ == "__main__":
     parser.add_argument("--threaded",
                         action="store_true",
                         help="run the program in threaded mode")
+    parser.add_argument("--filename",
+                        action="store",
+                        dest="filename",
+                        help="run the program in threaded mode")
     args = parser.parse_args()
 
     if args.singleFile:
         if args.threaded:
-            getForSingleGame(True)
+            getForSingleGame(True, args.filename)
         else:
-            getForSingleGame(False)
+            getForSingleGame(False, args.filename)
     elif args.allGames:
         if args.makeAll:
             getForAllGames(True)

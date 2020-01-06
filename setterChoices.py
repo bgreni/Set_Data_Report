@@ -19,6 +19,7 @@ class SetterChoicesReport:
         posResetInfos = MapInfos()
         negResetInfos = MapInfos()
         runBreakInfos = MapInfos()
+        self.totalPTAMap = dp().sdc.getChoices()
         self.allInfos = [locInfos, callInfos, ptaInfos,
                          impInfos, posResetInfos, negResetInfos, runBreakInfos]
         self.givenData = False
@@ -47,6 +48,7 @@ class SetterChoicesReport:
                 raise IOError("could not read from file: {}".format(filename))
         else:
             data = given
+
         # make a list of pandas df indexes for each rotation 1-6
         rotIndexes = []
         for i in range(1, 7):
@@ -57,9 +59,12 @@ class SetterChoicesReport:
         dpList = []
         print("Processing Data")
         for rot in rotIndexes:
-            newDp = dp(path)
+            posMap = self.inferPositions(data[rot])
+            newDp = dp(path, posMap)
             newDp.parsedata(data[rot])
             dpList.append(newDp)
+
+
 
         print("Creating Plots")
         for d in dpList:
@@ -73,14 +78,15 @@ class SetterChoicesReport:
         pdfGen = pdfg(path, filename.split(".")[0])
         pdfGen.createPdf(self.allInfos)
 
-    def threadFunction(self, queue, rot, data, path, allRot):
+    def threadFunction(self, queue, rot, data, path, allRot, posMap, allPTAInfos=None, ptaQ=None):
         """Function passed to the processes when running in threaded mode"""
 
-        newDp = dp(path)
+        newDp = dp(path, posMap)
         if allRot:
-            newDp.parsedata(data, "All Rotations")
+            newDp.parsedata(data, "All Rotations", passedPTAMap=allPTAInfos)
         else:
             newDp.parsedata(data[rot])
+            ptaQ.put(newDp.sdc.ptaMap)
         newDp.createPlots()
         infos = newDp.getInfos()
         queue.put(infos)
@@ -94,7 +100,6 @@ class SetterChoicesReport:
             data = pd.read_csv("{}/{}".format(path, filename), sep=',')
         else:
             data = given
-
         # make a list of pandas df indexes for each rotation 1-6
         rotIndexes = []
         for i in range(1, 7):
@@ -103,24 +108,56 @@ class SetterChoicesReport:
 
         threads = []
         q = Queue()
+        ptaQ = Queue()
         print("Processing Data")
         for rot in rotIndexes:
-            p = Process(target=self.threadFunction, args=[q, rot, data, path, False])
+            posMap = self.inferPositions(data[rot])
+            p = Process(target=self.threadFunction, args=[q, rot, data, path, False, posMap, None, ptaQ])
             p.start()
             threads.append(p)
 
-        # start one for all rotations
-        p = Process(target=self.threadFunction, args=[q, None, data, path, True])
-        p.start()
-        threads.append(p)
-
         for p in threads:
             infos = q.get()
+            ptamap = ptaQ.get()
+            print("--------------------------------")
+            print(ptamap)
+            print(self.totalPTAMap)
+            self.totalPTAMap.update(ptamap)
+            print(self.totalPTAMap)
             for i in range(len(self.allInfos)):
                 self.allInfos[i].infos += infos[i].infos
 
         for thread in threads:
             thread.join()
 
+        # start one for all rotations
+        posMap = self.inferPositions(data)
+        p = Process(target=self.threadFunction, args=[q, None, data, path, True, posMap, self.totalPTAMap, None])
+        p.start()
+        infos = q.get()
+        for i in range(len(self.allInfos)):
+            self.allInfos[i].infos += infos[i].infos
+
+        p.join()
         pdfGen = pdfg(path, filename.split(".")[0])
         pdfGen.createPdf(self.allInfos)
+
+    def inferPositions(self, data):
+        countMap = {}
+        for index, row in data.iterrows():
+            set = dp.stripDelims(row["choice"])[0]
+            player = row["result"][:-1]
+            if player not in countMap:
+                countMap[player] = {}
+            if set not in countMap[player]:
+                countMap[player][set] = 0
+            countMap[player][set] += 1
+
+        posInferenceMap = {}
+        for p, s in countMap.items():
+            pos = max(s)
+            posInferenceMap[p] = pos
+        return posInferenceMap
+
+    def mergeMaps(self, totalMap, map):
+
