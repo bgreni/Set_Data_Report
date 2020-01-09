@@ -18,3 +18,10 @@ class MapInfos:
 
     def add(self, info):
         self.infos.append(info)
+
+    def __repr__(self):
+        string = ""
+        for info in self.infos:
+            string += "/{}-{}/\n".format(info.filename, info.rotation)
+        string += "\n\n"
+        return string

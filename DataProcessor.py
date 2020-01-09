@@ -68,10 +68,6 @@ class DataProcessor:
             self.rotation = rotation
         else:
             self.rotation = data.iloc[0]["rotation"]
-        # print("---------------")
-        # print(self.rotation)
-        # print(self.posInferenceMap)
-        # print("---------------")
 
         for index, row in data.iterrows():
 
@@ -90,7 +86,7 @@ class DataProcessor:
 
             self.sdc.addToLocMap(lockey, choicekey, hitResult)
             self.sdc.addToSetCallMap(middleCall, choicekey, hitResult)
-            if int(passer) == int(chosenPlayer) and self.rotation != "All  Rotations":
+            if int(passer) == int(chosenPlayer):
                 self.hasPTA = True
                 self.sdc.addToPTAMap(choicekey, hitResult)
             else:
@@ -111,11 +107,7 @@ class DataProcessor:
             rt.updateOld(hitResult)
         self.sdc.addPasses(self.posInferenceMap)
         if passedPTAMap is not None:
-            # print(self.baseDirectory)
-            # print(self.hasPTA)
             self.sdc.ptaMap = passedPTAMap
-            # print(passedPTAMap)
-        # print(self.locMapDirectory, self.rotation, self.sdc.passCounts)
 
     def createPlots(self):
 
@@ -159,6 +151,7 @@ class DataProcessor:
 
     def createType1Map(self, m, title, directory, filenamePart, infos):
         fig, ax, im, captionString = self.createFigure(m)
+        # if fig is None tham no data for this existed
         if fig is None:
             return
         ax.set_title(title.format(self.rotation))
@@ -185,11 +178,6 @@ class DataProcessor:
         if p.shape == (0,):
             return None, None, None, None
 
-        # if str(self.rotation) == "1" and self.PTAMaking:
-        #     print(self.sdc.passCounts["8"])
-        #     print(self.sdc.ptaMap["Red"])
-        #     print(n[0][0])
-
         fig, ax = plt.subplots()
         im = ax.imshow(p, cmap="Greens", vmax=1.0, vmin=0.0)
 
@@ -202,22 +190,19 @@ class DataProcessor:
                 kPercent = "{:.2f}%".format(round(kp[i][j] * 100, 2))
                 efficiency = "{:.2f}%".format(round(eff[i][j] * 100, 2))
                 if self.PTAMaking:
-                    # print("---------------------")
-                    # print(n[i][j][2])
-                    # print(n[i][j][3])
-                    # print("---------------------")
                     passSetPercent = n[i][j][2] / float(n[i][j][3]) * 100 if n[i][j][3] != 0 else 0.0
-                    text = "{}\n{:.2f}% of passes\n{} Kill%\n{} Efficiency\n{} total sets\n{} total passes".format(self.sets[i][j], passSetPercent,
+                    text = "{}\n{:.2f}% of passes\n{} Kill%\n{} Eff\n{} total sets\n{} total passes".format(self.sets[i][j], passSetPercent,
                                                                                            kPercent, efficiency,
                                                                                            n[i][j][2], n[i][j][3])
                 else:
-                    text = "{}\n{} of sets\n{} Kill%\n{} Efficiency\n{} total sets".format(self.sets[i][j], percent,
+                    text = "{}\n{} of sets\n{} Kill%\n{} Eff\n{} total sets".format(self.sets[i][j], percent,
                                                                                        kPercent, efficiency, n[i][j][2])
                 ax.text(j, i, text, ha="center", va="center", color="black")
         return fig, ax, im, captionString
 
     def createChoiceArray(self, m):
         middleStuff = []
+        # combine middle sets into one
         for i in range(4):
             middleStuff.append(m["31"][i] + m["51"][i] + m["61"][i] + m["FS"][i])
 
@@ -249,12 +234,12 @@ class DataProcessor:
         sets = ["31", "51", "61", "FS"]
         for i in range(len(stats)):
             if self.PTAMaking:
-                captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total passes \n".format(sets[i],
+                captionString += "{}: {:.2f}% kill, {:.2f}% kill eff, {:.2f}% of total passes \n".format(sets[i],
                                                                                                          stats[i][0],
                                                                                                          stats[i][1],
                                                                                                          stats[i][2])
             else:
-                captionString += "{}: {:.2f}% kill, {:.2f}% kill efficiency, {:.2f}% of total \n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
+                captionString += "{}: {:.2f}% kill, {:.2f}% kill eff, {:.2f}% of total \n".format(sets[i], stats[i][0], stats[i][1], stats[i][2])
         setDumps = "Setter Dumps: {:.0f} kills on {} attempts\n".format(m["D"][0], m["D"][2])
         captionString += setDumps
         percent = []

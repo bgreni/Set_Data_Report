@@ -6,5 +6,6 @@ __pycache__/
 test.py
 *Report*
 Game-Stats/
+Game-Stats-test/
 !Examples/*
 

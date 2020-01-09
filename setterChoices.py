@@ -11,7 +11,7 @@ from tkinter import filedialog
 class SetterChoicesReport:
     """Generates a report of heat maps for various cases"""
 
-    def __init__(self):
+    def __init__(self, totalPTAMap=None, allptaByRotation=None):
         locInfos = MapInfos()
         callInfos = MapInfos()
         ptaInfos = MapInfos()
@@ -19,10 +19,17 @@ class SetterChoicesReport:
         posResetInfos = MapInfos()
         negResetInfos = MapInfos()
         runBreakInfos = MapInfos()
-        self.totalPTAMap = dp().sdc.getChoices()
+        if totalPTAMap is None:
+            self.givenPTA = True
+            self.totalPTAMap = dp().sdc.getChoices()
+        else:
+            self.totalPTAMap = totalPTAMap
+            self.givenPTA = False
         self.allInfos = [locInfos, callInfos, ptaInfos,
                          impInfos, posResetInfos, negResetInfos, runBreakInfos]
         self.givenData = False
+        self.ptaByRotation = {}
+        self.allptaByRotation = allptaByRotation
 
     def getFileName(self):
         """Lets the user chose a file, then returns the name of that file and the path to it"""
@@ -64,8 +71,6 @@ class SetterChoicesReport:
             newDp.parsedata(data[rot])
             dpList.append(newDp)
 
-
-
         print("Creating Plots")
         for d in dpList:
             d.createPlots()
@@ -86,7 +91,12 @@ class SetterChoicesReport:
             newDp.parsedata(data, "All Rotations", passedPTAMap=allPTAInfos)
         else:
             newDp.parsedata(data[rot])
-            ptaQ.put(newDp.sdc.ptaMap)
+            if allPTAInfos is None:
+                ptaQ.put((newDp.sdc.ptaMap, newDp.hasPTA, newDp.rotation))
+            else:
+                rotation = str(newDp.rotation)
+                ptaQ.put((allPTAInfos[rotation], True, rotation))
+                newDp.sdc.ptaMap = allPTAInfos[rotation]
         newDp.createPlots()
         infos = newDp.getInfos()
         queue.put(infos)
@@ -112,18 +122,18 @@ class SetterChoicesReport:
         print("Processing Data")
         for rot in rotIndexes:
             posMap = self.inferPositions(data[rot])
-            p = Process(target=self.threadFunction, args=[q, rot, data, path, False, posMap, None, ptaQ])
+            if self.allptaByRotation is None:
+                p = Process(target=self.threadFunction, args=[q, rot, data, path, False, posMap, None, ptaQ])
+            else:
+                p = Process(target=self.threadFunction, args=[q, rot, data, path, False, posMap, self.allptaByRotation, ptaQ])
             p.start()
             threads.append(p)
 
         for p in threads:
             infos = q.get()
-            ptamap = ptaQ.get()
-            print("--------------------------------")
-            print(ptamap)
-            print(self.totalPTAMap)
-            self.totalPTAMap.update(ptamap)
-            print(self.totalPTAMap)
+            ptamap, hasPTA, rotation = ptaQ.get()
+            if hasPTA:
+                self.combineMaps(ptamap, rotation, self.totalPTAMap)
             for i in range(len(self.allInfos)):
                 self.allInfos[i].infos += infos[i].infos
 
@@ -159,5 +169,11 @@ class SetterChoicesReport:
             posInferenceMap[p] = pos
         return posInferenceMap
 
-    def mergeMaps(self, totalMap, map):
+    def combineMaps(self, map2, rotation, map1):
+        for key in map1.keys():
+            for i in range(len(map1[key])):
+                map1[key][i] += map2[key][i]
+
+        self.ptaByRotation[rotation] = map2
+
 
